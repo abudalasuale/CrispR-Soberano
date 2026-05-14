@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="pt-pt">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>crispr-soberano</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* reforco estrito de minúsculas e dark mode */
+        body {
+            background-color: #0a0a0a;
+            color: #d1d5db;
+            font-family: 'courier new', courier, monospace;
+            text-transform: lowercase !important;
+            margin: 0;
+            overflow: hidden; /* previne scroll geral, gerido por secoes */
+        }
+        
+        input, button, textarea, div, span, p, h1, h2, h3, a {
+            text-transform: lowercase !important;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 10;
+            pointer-events: none; /* deixa os cliques passarem para o 3d onde nao ha ui */
+            display: flex;
+            flex-direction: column;
+        }
+
+        .pointer-events-auto {
+            pointer-events: auto;
+        }
+
+        /* scrollbar customizada dark */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
+
+        .ar-button-custom {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            pointer-events: auto;
+        }
+        
+        .floating-label {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #ef4444; /* red-500 para alertas */
+            color: #f87171;
+            padding: 4px 8px;
+            font-size: 0.75rem;
+            border-radius: 4px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            transform: translate(-50%, -100%);
+        }
+    </style>
+    <!-- importmap para three.js moderno -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.150.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <!-- contentor do webgl/webxr -->
+    <div id="canvas-container"></div>
+
+    <!-- camada de interface -->
+    <div id="ui-layer">
+        
+        <!-- barra superior -->
+        <header class="flex justify-between items-center p-4 bg-black bg-opacity-70 border-b border-gray-800 pointer-events-auto backdrop-blur-sm">
+            <div class="flex items-center gap-3">
+                <button id="menu-toggle" class="text-gray-400 hover:text-white focus:outline-none">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                </button>
+                <h1 class="text-lg font-bold tracking-tighter text-blue-400">crispr-soberano <span class="text-gray-500 font-normal">| abu</span></h1>
+            </div>
+            
+            <div class="flex items-center gap-4">
+                <button id="btn-download-html" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 py-1 px-2 rounded border border-gray-600 transition-colors hidden sm:block" title="baixar código fonte">baixar html</button>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-gray-500 hidden sm:inline">operador:</span>
+                    <input type="text" id="operador-input" value="abu" class="bg-transparent border-b border-gray-700 text-gray-300 text-sm focus:outline-none focus:border-blue-500 w-24 sm:w-32 pb-0 text-right sm:text-left">
+                </div>
+                <div class="text-xs text-gray-500 bg-gray-900 px-2 py-1 rounded hidden md:block">v0.1.0-mvp</div>
+            </div>
+        </header>
+
+        <div class="flex flex-1 overflow-hidden">
+            
+            <!-- menu lateral (módulos) -->
+            <aside id="sidebar" class="w-64 bg-black bg-opacity-80 border-r border-gray-800 overflow-y-auto transition-transform duration-300 transform -translate-x-full pointer-events-auto backdrop-blur-md flex-shrink-0 absolute h-full z-20 md:relative md:translate-x-0">
+                <nav class="p-4 flex flex-col gap-1 text-sm">
+                    <div class="text-gray-600 mb-2 border-b border-gray-800 pb-1">pipeline de edição</div>
+                    <a href="#" class="p-2 text-gray-500 hover:text-gray-300">m1: input & design</a>
+                    <a href="#" class="p-2 text-gray-500 hover:text-gray-300">m2: biofísica (core)</a>
+                    <a href="#" class="p-2 text-gray-500 hover:text-gray-300">m3: segurança</a>
+                    <a href="#" class="p-2 bg-gray-900 text-blue-400 border-l-2 border-blue-500 font-bold">m4: verificação in silico</a>
+                    <a href="#" class="p-2 text-gray-500 hover:text-gray-300">m5: dinâmica molecular</a>
+                    <a href="#" class="p-2 text-gray-500 hover:text-gray-300">m6: compressão genómica</a>
+                    <a href="#" class="p-2 bg-gray-900 text-purple-400 border-l-2 border-purple-500 font-bold">m7: preditor de fenótipo</a>
+                    <a href="#" class="p-2 text-gray-500 hover:text-gray-300">m8: imunogenicidade</a>
+                    <a href="#" class="p-2 text-gray-500 hover:text-gray-300">m9: integração clínica (maputo)</a>
+                    <a href="#" class="p-2 text-gray-500 hover:text-gray-300">m10: ética & conformidade</a>
+                    <a href="#" class="p-2 text-gray-500 hover:text-gray-300">m11: relatórios</a>
+                    <a href="#" class="p-2 text-gray-500 hover:text-gray-300">m12: exportação</a>
+                    <a href="#" class="p-2 bg-gray-900 text-green-400 border-l-2 border-green-500 font-bold">m13: simulador ar</a>
+                    <a href="#" class="p-2 text-gray-500 hover:text-gray-300">m14-m18: [em desenvolvimento]</a>
+                </nav>
+            </aside>
+
+            <!-- area principal de controlo de simulacao -->
+            <main class="flex-1 p-4 pointer-events-none flex flex-col justify-end md:justify-start">
+                
+                <!-- painel de analise (flutuante sobre o 3d) -->
+                <div class="bg-black bg-opacity-75 border border-gray-800 p-4 rounded-lg pointer-events-auto backdrop-blur-md max-w-md w-full mb-16 md:mb-0">
+                    <h2 class="text-blue-500 font-bold mb-3 border-b border-gray-800 pb-1">parâmetros de simulação</h2>
+                    
+                    <div class="flex flex-col gap-3">
+                        <div>
+                            <label class="text-xs text-gray-400">grna alvo (20nt):</label>
+                            <input type="text" id="grna-input" value="gagtccgagcagaagaagaa" class="w-full bg-gray-900 border border-gray-700 text-gray-200 p-2 text-xs rounded focus:border-blue-500 focus:outline-none" maxlength="20">
+                        </div>
+                        
+                        <div>
+                            <label class="text-xs text-gray-400">foco populacional (m9 preliminar):</label>
+                            <select class="w-full bg-gray-900 border border-gray-700 text-gray-200 p-2 text-xs rounded focus:border-blue-500 focus:outline-none">
+                                <option>vcf_africa_subsariana (padrão)</option>
+                                <option>vcf_global_1000g</option>
+                            </select>
+                        </div>
+
+                        <button id="btn-simulate" class="w-full bg-blue-900 hover:bg-blue-800 text-blue-200 py-2 rounded text-xs font-bold transition-colors border border-blue-700 mt-2">
+                            executar análise in silico (m4 + m7)
+                        </button>
+                    </div>
+
+                    <!-- resultados (inicialmente oculto) -->
+                    <div id="results-panel" class="hidden mt-4 pt-3 border-t border-gray-800 text-xs">
+                        <div class="text-red-400 mb-1">> risco off-target: detectado (dist=3)</div>
+                        <div class="text-purple-400 mb-1">> reparação provável: nhej</div>
+                        <div class="text-yellow-400 mb-4">> predição de fenótipo: mutação frameshift</div>
+                        
+                        <button id="btn-export" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 rounded text-xs font-bold transition-colors border border-gray-600 flex items-center justify-center gap-2 pointer-events-auto">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            baixar relatório (m12)
+                        </button>
+                    </div>
+                </div>
+                
+            </main>
+        </div>
+    </div>
+
+    <!-- labels 3d (geridos via js) -->
+    <div id="label-offtarget" class="floating-label">alvo pam / clivagem</div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { ARButton } from 'three/addons/webxr/ARButton.js';
+
+        // estado da ui
+        const sidebar = document.getElementById('sidebar');
+        const menuToggle = document.getElementById('menu-toggle');
+        const btnSimulate = document.getElementById('btn-simulate');
+        const resultsPanel = document.getElementById('results-panel');
+        const offtargetLabel = document.getElementById('label-offtarget');
+        const btnExport = document.getElementById('btn-export'); // nova ref
+        const btnDownloadHtml = document.getElementById('btn-download-html'); // nova ref html
+
+        menuToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('-translate-x-full');
+        });
+
+        // simulacao api
+        btnSimulate.addEventListener('click', () => {
+            const originalText = btnSimulate.innerText;
+            btnSimulate.innerText = "a processar genomas...";
+            btnSimulate.disabled = true;
+            
+            // simulacao de latencia de rede e processamento python
+            setTimeout(() => {
+                btnSimulate.innerText = originalText;
+                btnSimulate.disabled = false;
+                resultsPanel.classList.remove('hidden');
+                offtargetLabel.style.opacity = 1;
+                
+                // animar a camera para o local do corte
+                if(camera && controls) {
+                    controls.target.set(0, 0, 0);
+                    camera.position.set(0, 0, 10);
+                }
+            }, 1500);
+        });
+
+        btnExport.addEventListener('click', () => {
+            const grna = document.getElementById('grna-input').value;
+            const operador = document.getElementById('operador-input').value;
+            
+            // construcao da estrutura do relatorio
+            const relatorio = {
+                operador: operador,
+                timestamp: new Date().toISOString(),
+                contexto_geolocal: "maputo, mozambique",
+                parametros_input: {
+                    grna_sequencia: grna,
+                    foco_populacional: "vcf_africa_subsariana"
+                },
+                resultados_in_silico: {
+                    risco_off_target: "elevado (distância de edição = 3)",
+                    via_reparacao_dominante: "nhej",
+                    predicao_fenotipo: "mutação frameshift",
+                    impacto_proteico: "alta disrupção no domínio funcional"
+                }
+            };
+
+            // geracao do ficheiro blob e download automatico via js
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(relatorio, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "relatorio_soberano_" + Date.now() + ".json");
+            document.body.appendChild(downloadAnchorNode); 
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        });
+
+        // nova funcao para baixar o proprio ficheiro html
+        btnDownloadHtml.addEventListener('click', () => {
+            const htmlContent = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+            const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "crispr_soberano_abu.html";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+
+        // ==========================================
+        // motor 3d - three.js (módulo 13 core)
+        // ==========================================
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        // fundo transparente para suportar passthrough webxr (ar)
+        scene.background = null; 
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 0, 15);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.xr.enabled = true; // ativa pipeline webxr
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.5;
+
+        // iluminacao dramatica
+        const ambientLight = new THREE.AmbientLight(0x222222);
+        scene.add(ambientLight);
+        const pointLight = new THREE.PointLight(0x4466ff, 2, 50);
+        pointLight.position.set(5, 5, 5);
+        scene.add(pointLight);
+        const pointLight2 = new THREE.PointLight(0xff4466, 1, 50);
+        pointLight2.position.set(-5, -5, -5);
+        scene.add(pointLight2);
+
+        // ==========================================
+        // construcao da dupla helice de dna
+        // ==========================================
+        const dnaGroup = new THREE.Group();
+        const basePairs = 30;
+        const radius = 2;
+        const heightStep = 0.5;
+        const angleStep = 0.3;
+
+        const materialBackbone = new THREE.MeshPhongMaterial({ color: 0x333333, shininess: 100 });
+        const materialA = new THREE.MeshPhongMaterial({ color: 0xef4444 }); // red
+        const materialT = new THREE.MeshPhongMaterial({ color: 0x3b82f6 }); // blue
+        const materialC = new THREE.MeshPhongMaterial({ color: 0x10b981 }); // green
+        const materialG = new THREE.MeshPhongMaterial({ color: 0xf59e0b }); // yellow
+
+        const sphereGeo = new THREE.SphereGeometry(0.3, 16, 16);
+        const tubeGeo = new THREE.CylinderGeometry(0.1, 0.1, radius * 2, 8);
+
+        // ponto de interesse (clivagem)
+        let cleavagePoint = new THREE.Vector3();
+
+        for (let i = 0; i < basePairs; i++) {
+            const y = (i - basePairs / 2) * heightStep;
+            const angle = i * angleStep;
+
+            const x1 = Math.cos(angle) * radius;
+            const z1 = Math.sin(angle) * radius;
+            const x2 = Math.cos(angle + Math.PI) * radius;
+            const z2 = Math.sin(angle + Math.PI) * radius;
+
+            // backbones
+            const bb1 = new THREE.Mesh(sphereGeo, materialBackbone);
+            bb1.position.set(x1, y, z1);
+            dnaGroup.add(bb1);
+
+            const bb2 = new THREE.Mesh(sphereGeo, materialBackbone);
+            bb2.position.set(x2, y, z2);
+            dnaGroup.add(bb2);
+
+            // bridge (pontes de hidrogenio simplificadas)
+            const bridge = new THREE.Mesh(tubeGeo, i % 2 === 0 ? materialA : materialC);
+            bridge.position.set(0, y, 0);
+            bridge.rotation.y = -angle;
+            bridge.rotation.z = Math.PI / 2;
+            dnaGroup.add(bridge);
+
+            // guardar um ponto central para anexar o label e a cas9
+            if (i === Math.floor(basePairs / 2)) {
+                cleavagePoint.set(x1/2, y, z1/2);
+            }
+        }
+
+        // ==========================================
+        // enzima cas9 (abstracao visual leve para mobile)
+        // ==========================================
+        const cas9Geo = new THREE.IcosahedronGeometry(3.5, 2);
+        const cas9Mat = new THREE.MeshPhysicalMaterial({
+            color: 0x4b5563,
+            transparent: true,
+            opacity: 0.6,
+            roughness: 0.2,
+            transmission: 0.5,
+            thickness: 1.0
+        });
+        const cas9Mesh = new THREE.Mesh(cas9Geo, cas9Mat);
+        cas9Mesh.position.copy(cleavagePoint);
+        // escalar no eixo Y para parecer envolver o DNA
+        cas9Mesh.scale.set(1, 1.5, 1);
+        dnaGroup.add(cas9Mesh);
+
+        // rodar dna para ficar na horizontal
+        dnaGroup.rotation.z = Math.PI / 4;
+        
+        // agrupar num root para facilmente manipular em ar
+        const arRoot = new THREE.Group();
+        arRoot.add(dnaGroup);
+        // afastar na profundidade padrao (para ar)
+        arRoot.position.z = -5; 
+        scene.add(arRoot);
+
+        // ==========================================
+        // integracao ar (webxr)
+        // ==========================================
+        // cria e anexa o botao ar nativo do three.js
+        const arButton = ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] });
+        arButton.classList.add('ar-button-custom', 'bg-purple-900', 'hover:bg-purple-800', 'text-white', 'py-2', 'px-6', 'rounded-full', 'font-bold', 'text-xs', 'border', 'border-purple-500');
+        // forcar texto minusculo no botao gerado pelo threejs
+        arButton.innerText = "entrar em realidade aumentada (m13)";
+        document.body.appendChild(arButton);
+
+        // redimensionamento
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // projectar 3d para 2d (ecrã) para o label flutuante
+        function updateLabelPosition() {
+            if (offtargetLabel.style.opacity == 1) {
+                // obtem a posicao mundial do ponto de clivagem
+                const worldPos = new THREE.Vector3();
+                cas9Mesh.getWorldPosition(worldPos);
+
+                // projecta para coordenadas normalizadas de ecra (-1 a +1)
+                worldPos.project(camera);
+
+                // converte para pixeis css
+                const x = (worldPos.x * .5 + .5) * window.innerWidth;
+                const y = (worldPos.y * -.5 + .5) * window.innerHeight;
+
+                offtargetLabel.style.left = `${x}px`;
+                offtargetLabel.style.top = `${y}px`;
+            }
+        }
+
+        // ciclo de animacao otimizado
+        renderer.setAnimationLoop((timestamp) => {
+            // so rodar se nao estiver em sessao xr ativa (para nao desorientar no ar)
+            if (!renderer.xr.isPresenting) {
+                controls.update();
+                // respiracao pulsante da cas9
+                cas9Mesh.scale.x = 1 + Math.sin(timestamp * 0.002) * 0.05;
+                cas9Mesh.scale.z = 1 + Math.sin(timestamp * 0.002) * 0.05;
+            } else {
+                // em ar, o dna roda suavemente sobre si mesmo
+                dnaGroup.rotation.y += 0.01;
+            }
+            
+            updateLabelPosition();
+            renderer.render(scene, camera);
+        });
+
+    </script>
+</body>
+</html>
